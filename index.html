@@ -226,6 +226,10 @@
     </div>
 
     <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, onSnapshot, addDoc, setDoc, deleteDoc, writeBatch, getDocs, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
         let allProjects = []; 
         let fixedCosts = [];
         let displayedYear = new Date().getFullYear();
@@ -237,6 +241,11 @@
         let cashflowChart = null;
         let isVatView = false;
         let currentSortOrder = 'newest';
+        let userId = null;
+        let projectsCollectionRef = null;
+        let fixedCostsDocRef = null;
+        let unsubscribeProjects = null;
+        let unsubscribeFixedCosts = null;
 
         const MONTH_NAMES = ["LED", "ÚNO", "BŘE", "DUB", "KVĚ", "ČVN", "ČVC", "SRP", "ZÁŘ", "ŘÍJ", "LIS", "PRO"];
         
@@ -973,27 +982,8 @@
         };
 
         const loadInitialData = () => {
-            allProjects = [
-                // --- Past Data (2023 & 2024) ---
-                { id: 'Právní Kancelář JUDr. Klidný-IT PODPORA 2023', clientName: 'Právní Kancelář JUDr. Klidný', projectName: 'IT PODPORA 2023', items: [
-                    { id: crypto.randomUUID(), name: 'PAUŠÁL ČERVENEC 2023', price: 9500, externalCost: 0, externalCostName: '', issueDate: '2023-07-05', dueDateDays: 14, description: 'Měsíční IT podpora a správa sítě.', vatRate: 21 },
-                ]},
-                { id: 'Digitální Svět s.r.o.-NOVÝ E-SHOP', clientName: 'Digitální Svět s.r.o.', projectName: 'NOVÝ E-SHOP', items: [ 
-                    { id: crypto.randomUUID(), name: 'VÝVOJ FRONTENDU', price: 120000, externalCost: 40000, externalCostName: 'EXTERNÍ KODÉR', issueDate: '2025-03-20', dueDateDays: 30, description: 'Kódování HTML/CSS/JS šablon.', vatRate: 21 },
-                    { id: crypto.randomUUID(), name: 'VÝVOJ BACKENDU', price: 150000, externalCost: 50000, externalCostName: 'EXTERNÍ PROGRAMÁTOR', issueDate: '2025-05-10', dueDateDays: 30, description: 'Napojení na skladový systém a platební bránu.', vatRate: 21 } 
-                ]},
-                 { id: 'Gastro Provoz s.r.o.-MĚSÍČNÍ DODÁVKY', clientName: 'Gastro Provoz s.r.o.', projectName: 'MĚSÍČNÍ DODÁVKY', items: [ 
-                    { id: crypto.randomUUID(), name: 'DODÁVKA SUROVIN - LEDEN', price: 80000, externalCost: 65000, externalCostName: 'NÁKUP SUROVIN', issueDate: '2025-01-05', dueDateDays: 14, description: '', vatRate: 15 },
-                     { id: crypto.randomUUID(), name: 'DODÁVKA SUROVIN - ÚNOR', price: 85000, externalCost: 70000, externalCostName: 'NÁKUP SUROVIN', issueDate: '2025-02-05', dueDateDays: 14, description: '', vatRate: 15 },
-                ]},
-                 { id: 'Módní Butik "Elegance"-VÁNOČNÍ KAMPAŇ', clientName: 'Módní Butik "Elegance"', projectName: 'VÁNOČNÍ KAMPAŇ', items: [ { id: crypto.randomUUID(), name: 'KOMPLETNÍ PRODUKCE', price: 500000, externalCost: 150000, externalCostName: 'NÁKUP REKLAMNÍHO PROSTORU', issueDate: '2025-10-15', dueDateDays: 30, description: 'Vánoční kampaň pro TV a online.', vatRate: 21 } ]},
-            ];
-            fixedCosts = [
-                { id: crypto.randomUUID(), name: 'NÁJEM KANCELÁŘE', amount: 45000, vatRate: 21 },
-                { id: crypto.randomUUID(), name: 'MZDY', amount: 80000, vatRate: 0 },
-                { id: crypto.randomUUID(), name: 'SOFTWARE LICENCE', amount: 5000, vatRate: 21 },
-                { id: crypto.randomUUID(), name: 'TELEFONY A INTERNET', amount: 2000, vatRate: 21 },
-            ];
+            allProjects = [];
+            fixedCosts = [];
             
             renderAll();
             loadingEl.classList.add('hidden');
@@ -1003,7 +993,7 @@
         
         const renderAll = () => {
             renderTimeline();
-            renderProjects(allProjects);
+            renderProjects();
             renderFixedCosts();
         };
 
