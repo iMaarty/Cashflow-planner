@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plánovač Cash Flow</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        body {
+            font-family: 'Fira Mono', monospace;
+        }
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        
+        /* Blur effect for the background content */
+        .app-blurred {
+            filter: blur(4px);
+            transition: filter 300ms ease-out;
+        }
+
+        /* Modal overlay fade animation */
+        .modal-enter {
+            opacity: 0;
+        }
+        .modal-enter-active {
+            opacity: 1;
+            transition: opacity 300ms ease-out;
+        }
+        .modal-leave-active {
+            opacity: 0;
+            transition: opacity 200ms ease-in;
+        }
+
+        /* Modal panel (content) scale and fade animation */
+        .modal-enter .modal-panel {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+        .modal-enter-active .modal-panel {
+            opacity: 1;
+            transform: scale(1);
+            transition: all 300ms ease-out;
+        }
+        .modal-leave-active .modal-panel {
+            opacity: 0;
+            transform: scale(0.95);
+            transition: all 200ms ease-in;
+        }
+
+        /* Ensure timeline items have enough space */
+        #timeline > div {
+            min-width: 110px;
+        }
+        /* Styles for the sticky header */
+        .is-sticky {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            z-index: 40; /* Lower than modal's z-index */
+            border-radius: 0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .is-sticky .header-main-content {
+            display: none;
+        }
+        .is-sticky .header-timeline-content {
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+        }
+        .month-item.selected {
+            background-color: #4b5563; /* bg-gray-600 */
+        }
+        .item-arrow {
+            transition: transform 0.3s ease;
+        }
+        .item-expanded .item-arrow {
+            transform: rotate(90deg);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-700 antialiased text-xs uppercase font-normal">
+
+    <!-- Auth Container -->
+    <div id="authContainer" class="min-h-screen flex items-center justify-center bg-gray-800">
+        <div class="max-w-md w-full bg-white p-8 rounded-lg shadow-lg">
+            <div class="flex justify-center mb-8">
+                 <svg width="98" height="26" viewBox="0 0 98 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M20.9756 16.1982V0.724609H97.7246V25.8838H21.6035L7.05371 9.55078V25.8838H0.397461V0.724609H7.22461L20.9756 16.1982ZM31.0088 8.47168V18.1367H32.3896V13.9951H33.0527L35.7451 18.1367H37.3604L34.2266 13.3047L37.3604 8.47168H35.7451L33.0527 12.6143H32.3896V8.47168H31.0088ZM38.3447 18.1367H43.7021V16.7559H39.7256V8.47168H38.3447V18.1367ZM46.9922 8.47168C45.57 8.47168 44.3965 9.57626 44.3965 10.957V15.6377C44.3965 17.0047 45.57 18.1367 46.9922 18.1367H48.1514C49.5874 18.1367 50.748 17.0047 50.748 15.6377V10.957C50.748 9.57626 49.5874 8.47168 48.1514 8.47168H46.9922ZM52.3545 18.1367H53.7354V10.4873L56.7588 18.1367H58.8438V8.47168H57.4629V16.1211L54.4395 8.47168H52.3545V18.1367ZM60.5527 18.1367H64.1426C65.5095 18.1367 66.6279 17.0047 66.6279 15.6377V10.957C66.6279 9.57626 65.5095 8.47168 64.1426 8.47168H60.5527V18.1367ZM67.8105 9.85254H70.1582V16.7559H67.8105V18.1367H73.8857V16.7559H71.5391V9.85254H73.8857V8.47168H67.8105V9.85254ZM75.1826 18.1367H76.5635V13.9951H77.2266L79.9189 18.1367H81.5342L78.4004 13.3047L81.5342 8.47168H79.9189L77.2266 12.6143H76.5635V8.47168H75.1826V18.1367ZM82.5186 18.1367H88.041V16.7559H83.8994V13.7598H87.5029V12.3789H83.8994V9.85254H88.041V8.47168H82.5186V18.1367ZM48.1514 9.85254C48.8418 9.85254 49.3809 10.3357 49.3809 10.957V15.6377C49.3809 16.2452 48.8141 16.7422 48.1514 16.7422H46.9922C46.3294 16.7422 45.7627 16.2452 45.7627 15.6377V10.957C45.7627 10.3495 46.3018 9.85254 46.9922 9.85254H48.1514ZM64.1426 9.85254C64.7639 9.85254 65.2471 10.3495 65.2471 10.957V15.6377C65.2471 16.2452 64.7501 16.7422 64.1426 16.7422H61.9336V9.85254H64.1426Z" fill="black"/>
+                </svg>
+            </div>
+            <div id="authInitialView">
+                <div class="flex flex-col space-y-4">
+                    <button type="button" id="showLoginBtn" class="w-full bg-black text-white py-3 rounded-md shadow-md hover:bg-gray-800">PŘIHLÁSIT SE</button>
+                    <button type="button" id="showRegisterBtn" class="w-full border border-gray-400 text-gray-700 py-3 rounded-md hover:bg-gray-200">REGISTROVAT SE</button>
+                </div>
+            </div>
+            <div id="authFormView" class="hidden">
+                <h3 id="authFormTitle" class="text-center text-xl font-bold text-gray-800 mb-6"></h3>
+                <form id="authForm">
+                    <div class="mb-4">
+                        <label for="email" class="block text-gray-600 mb-1">EMAIL</label>
+                        <input type="email" id="email" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black" required>
+                    </div>
+                    <div class="mb-6">
+                        <label for="password" class="block text-gray-600 mb-1">HESLO</label>
+                        <input type="password" id="password" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black" required>
+                    </div>
+                     <p id="authError" class="text-red-500 text-sm mb-4 hidden"></p>
+                     <p id="authSuccess" class="text-green-500 text-sm mb-4 hidden"></p>
+                    <div class="flex items-center justify-between">
+                        <button type="button" id="authActionBtn" class="bg-black text-white py-2 px-5 rounded-md shadow-md hover:bg-gray-800"></button>
+                        <button type="button" id="backToAuthInitialBtn" class="text-sm text-gray-500 hover:text-black">Zpět</button>
+                    </div>
+                    <div class="text-center mt-4">
+                         <a href="#" id="forgotPasswordLink" class="text-sm text-gray-500 hover:text-black hidden">Zapomenuté heslo?</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Container (hidden by default) -->
+    <div id="app" class="hidden">
+        
+        <!-- Inverted Header Section -->
+        <div id="sticky-header-container" class="bg-gray-800 text-white shadow-lg transition-all duration-300">
+            <div class="container mx-auto p-4 sm:p-6">
+                 <!-- Header -->
+                <header class="header-main-content flex flex-col sm:flex-row items-center mb-6 space-y-4 sm:space-y-0 sm:gap-6">
+                    <div class="text-white flex-shrink-0">
+                        <svg width="98" height="26" viewBox="0 0 98 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M20.9756 16.1982V0.724609H97.7246V25.8838H21.6035L7.05371 9.55078V25.8838H0.397461V0.724609H7.22461L20.9756 16.1982ZM31.0088 8.47168V18.1367H32.3896V13.9951H33.0527L35.7451 18.1367H37.3604L34.2266 13.3047L37.3604 8.47168H35.7451L33.0527 12.6143H32.3896V8.47168H31.0088ZM38.3447 18.1367H43.7021V16.7559H39.7256V8.47168H38.3447V18.1367ZM46.9922 8.47168C45.57 8.47168 44.3965 9.57626 44.3965 10.957V15.6377C44.3965 17.0047 45.57 18.1367 46.9922 18.1367H48.1514C49.5874 18.1367 50.748 17.0047 50.748 15.6377V10.957C50.748 9.57626 49.5874 8.47168 48.1514 8.47168H46.9922ZM52.3545 18.1367H53.7354V10.4873L56.7588 18.1367H58.8438V8.47168H57.4629V16.1211L54.4395 8.47168H52.3545V18.1367ZM60.5527 18.1367H64.1426C65.5095 18.1367 66.6279 17.0047 66.6279 15.6377V10.957C66.6279 9.57626 65.5095 8.47168 64.1426 8.47168H60.5527V18.1367ZM67.8105 9.85254H70.1582V16.7559H67.8105V18.1367H73.8857V16.7559H71.5391V9.85254H73.8857V8.47168H67.8105V9.85254ZM75.1826 18.1367H76.5635V13.9951H77.2266L79.9189 18.1367H81.5342L78.4004 13.3047L81.5342 8.47168H79.9189L77.2266 12.6143H76.5635V8.47168H75.1826V18.1367ZM82.5186 18.1367H88.041V16.7559H83.8994V13.7598H87.5029V12.3789H83.8994V9.85254H88.041V8.47168H82.5186V18.1367ZM48.1514 9.85254C48.8418 9.85254 49.3809 10.3357 49.3809 10.957V15.6377C49.3809 16.2452 48.8141 16.7422 48.1514 16.7422H46.9922C46.3294 16.7422 45.7627 16.2452 45.7627 15.6377V10.957C45.7627 10.3495 46.3018 9.85254 46.9922 9.85254H48.1514ZM64.1426 9.85254C64.7639 9.85254 65.2471 10.3495 65.2471 10.957V15.6377C65.2471 16.2452 64.7501 16.7422 64.1426 16.7422H61.9336V9.85254H64.1426Z" fill="currentColor"/>
+                        </svg>
+                    </div>
+                    <div class="relative w-full sm:flex-1 sm:mx-6">
+                        <input type="text" id="searchInput" placeholder="VYHLEDAT KLIENTA, PROJEKT, POLOŽKU..." class="w-full bg-gray-700 text-white placeholder-gray-400 py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-white">
+                        <div id="autocomplete-list" class="absolute z-10 w-full bg-white text-gray-800 rounded-md shadow-lg mt-1 hidden"></div>
+                    </div>
+                    <div class="flex items-center space-x-4 flex-shrink-0">
+                        <button id="logoutBtn" class="border border-white text-white py-2 px-5 rounded-md hover:bg-white hover:text-black transition-colors">ODHLÁSIT SE</button>
+                        <button id="addProjectBtn" class="bg-white text-black py-2 px-5 rounded-md shadow-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-75 transition-colors">
+                            + PŘIDAT PROJEKT
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Timeline & Summary -->
+                <div class="header-timeline-content bg-gray-900 p-4 sm:p-6 rounded-md">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-4">
+                        <div class="flex items-center space-x-4">
+                            <button id="prevYearBtn" class="p-1 rounded-full hover:bg-gray-700 transition-colors" title="PŘEDCHOZÍ ROK">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                            </button>
+                            <h2 class="text-white">ROČNÍ PŘEHLED <span id="displayedYear"></span></h2>
+                            <button id="nextYearBtn" class="p-1 rounded-full hover:bg-gray-700 transition-colors" title="NÁSLEDUJÍCÍ ROK">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                            </button>
+                             <button id="viewToggleBtn" class="text-xs text-gray-400 hover:text-white w-20 text-center">GRAF</button>
+                             <button id="costsToggleBtn" class="text-xs text-gray-400 hover:text-white w-28 text-center">BEZ NÁKLADŮ</button>
+                             <button id="vatToggleBtn" class="text-xs text-gray-400 hover:text-white w-28 text-center">PŘEHLED DPH</button>
+                        </div>
+                        <div class="text-center sm:text-right mt-4 sm:mt-0 w-full sm:w-auto">
+                            <p id="totalAnnualRevenue" class="text-white text-lg">0 KČ</p>
+                        </div>
+                    </div>
+                    <div id="timeline" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12 gap-4 text-left">
+                        <!-- Months will be generated by JS -->
+                    </div>
+                    <div id="chartContainer" class="hidden h-48">
+                        <canvas id="cashflowChart"></canvas>
+                        <div id="custom-legend" class="flex justify-center items-center space-x-6 mt-2 text-xs"></div>
+                    </div>
+                    <div id="vatSummaryContainer" class="hidden text-white mt-4"></div>
+                </div>
+            </div>
+        </div>
+        <div id="header-placeholder"></div>
+
+        <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+            <!-- Loading Indicator -->
+            <div id="loading" class="text-center py-10">
+                <p class="text-gray-500">NAČÍTÁNÍ DAT...</p>
+            </div>
+
+            <!-- Main Content (hidden until data is loaded) -->
+            <main id="mainContent" class="hidden">
+                 <!-- Sorting Options -->
+                <div class="flex justify-end mb-4">
+                    <div class="flex items-center space-x-2">
+                        <label for="sortOrder" class="text-gray-500">ŘADIT PODLE:</label>
+                        <select id="sortOrder" class="bg-white border border-gray-300 rounded-md px-2 py-1 text-xs focus:ring-2 focus:ring-black">
+                            <option value="newest">NEJNOVĚJŠÍ</option>
+                            <option value="client">KLIENT</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- Projects List Container -->
+                <div id="projectsListContainer">
+                     <!-- Client groups will be generated by JS -->
+                </div>
+                <!-- Fixed Costs Container -->
+                <div id="fixedCostsContainer" class="hidden">
+                    <h2 class="text-gray-800 mb-3">SEZNAM FIXNÍCH NÁKLADŮ</h2>
+                    <div id="fixedCostsList" class="space-y-2 bg-white p-4 rounded-md shadow-sm"></div>
+                    <button id="addFixedCostBtn" class="mt-4 text-black hover:text-gray-700">+ PŘIDAT FIXNÍ NÁKLAD</button>
+                </div>
+                <div id="noProjects" class="hidden text-center py-10 bg-white rounded-md shadow-sm">
+                    <p class="text-gray-500">PRO ZVOLENÉ OBDOBÍ NEBYLY NALEZENY ŽÁDNÉ PROJEKTY.</p>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modal for Adding/Editing Project -->
+    <div id="projectModal" class="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center p-4 z-50 hidden modal-enter">
+        <div class="modal-panel bg-white rounded-md shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div class="p-6 border-b border-gray-200">
+                <h3 id="modalTitle" class="text-gray-800">PŘIDAT NOVÝ PROJEKT</h3>
+            </div>
+            <form id="projectForm" class="flex-grow overflow-y-auto p-6 space-y-4">
+                <input type="hidden" id="projectId">
+                <div>
+                    <label for="clientName" class="block text-gray-600 mb-1">NÁZEV KLIENTA</label>
+                    <input type="text" id="clientName" name="clientName" class="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-black focus:border-black transition" required>
+                </div>
+                <div>
+                    <label for="projectName" class="block text-gray-600 mb-1">NÁZEV PROJEKTU</label>
+                    <input type="text" id="projectName" name="projectName" class="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-black focus:border-black transition" required>
+                </div>
+
+                <!-- Project Items -->
+                <div>
+                    <h4 class="text-gray-800 mb-3">POLOŽKY PROJEKTU</h4>
+                    <div id="projectItemsContainer" class="space-y-3">
+                        <!-- Item fields will be generated by JS -->
+                    </div>
+                    <button type="button" id="addItemBtn" class="mt-3 text-black hover:text-gray-700">+ PŘIDAT DALŠÍ POLOŽKU</button>
+                </div>
+            </form>
+            <div class="p-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-3">
+                <button type="button" id="cancelModalBtn" class="bg-gray-200 text-gray-700 py-2 px-5 rounded-md hover:bg-gray-300 transition">ZRUŠIT</button>
+                <button type="submit" form="projectForm" id="saveProjectBtn" class="bg-black text-white py-2 px-5 rounded-md shadow-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black focus:ring-opacity-75 transition">ULOŽIT PROJEKT</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, onSnapshot, addDoc, setDoc, deleteDoc, writeBatch, getDocs, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        let allProjects = []; 
+        let fixedCosts = [];
+        let displayedYear = new Date().getFullYear();
+        let selectedMonth = null;
+        let currentSearchTerm = '';
+        let isFixedCostsMode = false;
+        let showGrossRevenue = false;
+        let isChartView = false;
+        let cashflowChart = null;
+        let isVatView = false;
+        let currentSortOrder = 'newest';
+        let userId = null;
+        let projectsCollectionRef = null;
+        let fixedCostsDocRef = null;
+        let unsubscribeProjects = null;
+        let unsubscribeFixedCosts = null;
+        let db;
+        let auth;
+        let isAppInitialized = false;
+
+        const MONTH_NAMES = ["LED", "ÚNO", "BŘE", "DUB", "KVĚ", "ČVN", "ČVC", "SRP", "ZÁŘ", "ŘÍJ", "LIS", "PRO"];
+        
+        const appContainer = document.getElementById('app');
+        const authContainer = document.getElementById('authContainer');
+        const loadingEl = document.getElementById('loading');
+        
+        // --- MODAL & FORM HANDLING ---
+
+        const openModal = () => {
+            appContainer.classList.add('app-blurred');
+            document.getElementById('projectModal').classList.remove('hidden');
+            document.body.classList.add('overflow-hidden');
+            setTimeout(() => document.getElementById('projectModal').classList.add('modal-enter-active'), 10);
+        };
+
+        const closeModal = () => {
+            appContainer.classList.remove('app-blurred');
+            document.getElementById('projectModal').classList.remove('modal-enter-active');
+            document.getElementById('projectModal').classList.add('modal-leave-active');
+            setTimeout(() => {
+                document.getElementById('projectModal').classList.add('hidden');
+                document.getElementById('projectModal').classList.remove('modal-leave-active');
+                document.body.classList.remove('overflow-hidden');
+                resetForm();
+            }, 200);
+        };
+        
+        const resetForm = () => {
+            document.getElementById('projectForm').reset();
+            document.getElementById('projectId').value = '';
+            document.getElementById('projectItemsContainer').innerHTML = '';
+            addItemRow();
+            document.getElementById('modalTitle').textContent = 'PŘIDAT NOVÝ PROJEKT';
+        };
+
+        const createItemRow = (item = {}) => {
+            const projectItemsContainer = document.getElementById('projectItemsContainer');
+            const div = document.createElement('div');
+            div.className = 'p-3 bg-gray-100 border border-gray-200 rounded-md';
+            div.dataset.itemId = item.id || `new_${crypto.randomUUID()}`;
+            
+            div.innerHTML = `
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-gray-600 mb-1">POPIS POLOŽKY</label>
+                        <input type="text" name="itemName" value="${item.name || ''}" class="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-black focus:border-black" required>
+                    </div>
+                    <div>
+                        <label class="block text-gray-600 mb-1">CENA (BEZ DPH)</label>
+                        <input type="number" name="itemPrice" value="${item.price || ''}" class="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-black focus:border-black" required min="0">
+                    </div>
+                     <div>
+                        <label class="block text-gray-600 mb-1">NÁZEV EXTERNÍHO NÁKLADU</label>
+                        <input type="text" name="itemExternalCostName" value="${item.externalCostName || ''}" class="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-black focus:border-black">
+                    </div>
+                    <div>
+                        <label class="block text-gray-600 mb-1">ČÁSTKA EXTERNÍHO NÁKLADU</label>
+                        <input type="number" name="itemExternalCost" value="${item.externalCost || 0}" class="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-black focus:border-black" required min="0">
+                    </div>
+                    <div>
+                        <label class="block text-gray-600 mb-1">VYSTAVENÍ</label>
+                        <input type="date" name="itemIssueDate" value="${item.issueDate || new Date().toISOString().split('T')[0]}" class="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-black focus:border-black" required>
+                    </div>
+                    <div>
+                        <label class="block text-gray-600 mb-1">SPLATNOST (DNY)</label>
+                        <input type="number" name="itemDueDateDays" value="${item.dueDateDays || 14}" class="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-black focus:border-black" required min="0">
+                    </div>
+                     <div>
+                        <label class="block text-gray-600 mb-1">SAZBA DPH (%)</label>
+                        <select name="itemVatRate" class="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-black focus:border-black">
+                            <option value="21" ${item.vatRate === 21 ? 'selected' : ''}>21%</option>
+                            <option value="15" ${item.vatRate === 15 ? 'selected' : ''}>15%</option>
+                            <option value="0" ${item.vatRate === 0 ? 'selected' : ''}>0%</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label class="block text-gray-600 mb-1">POZNÁMKA</label>
+                    <textarea name="itemDescription" class="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-black focus:border-black" rows="2" maxlength="300">${item.description || ''}</textarea>
+                </div>
+            `;
+            projectItemsContainer.appendChild(div);
+        };
+        
+        const addItemRow = () => createItemRow();
+
+        // --- DATA RENDERING ---
+
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
+        };
+
+        const renderTimeline = () => {
+            if (isChartView) {
+                renderChart();
+            } else if (isVatView) {
+                renderVatSummary();
+            } else {
+                renderTimelineBoxes();
+            }
+        };
+
+        const renderTimelineBoxes = () => {
+            document.getElementById('displayedYear').textContent = displayedYear;
+            const { monthlyProfit } = calculateMonthlyData();
+
+            const timelineContainer = document.getElementById('timeline');
+            timelineContainer.innerHTML = '';
+            monthlyProfit.forEach((total, index) => {
+                const monthDiv = document.createElement('div');
+                const textColorClass = total < 0 ? 'text-red-400' : 'text-green-400';
+                monthDiv.className = 'month-item p-3 rounded-md flex flex-col justify-center text-left cursor-pointer transition-colors bg-gray-800';
+                monthDiv.dataset.monthIndex = index;
+
+                if (index === selectedMonth) {
+                    monthDiv.classList.add('bg-gray-600', 'ring-2', 'ring-white');
+                }
+
+                monthDiv.innerHTML = `
+                    <p class="text-gray-400 pointer-events-none">${MONTH_NAMES[index]}</p>
+                    <p class="mt-1 break-words pointer-events-none ${textColorClass}">${formatCurrency(total)}</p>
+                `;
+                timelineContainer.appendChild(monthDiv);
+            });
+
+            const annualTotal = monthlyProfit.reduce((sum, total) => sum + total, 0);
+            const totalAnnualRevenueEl = document.getElementById('totalAnnualRevenue');
+            totalAnnualRevenueEl.className = `text-white text-lg ${annualTotal < 0 ? 'text-red-400' : 'text-green-400'}`;
+            totalAnnualRevenueEl.textContent = formatCurrency(annualTotal);
+        };
+        
+        const calculateMonthlyData = () => {
+            const monthlyIncome = Array(12).fill(0);
+            const monthlyCosts = Array(12).fill(0);
+            const monthlyProfit = Array(12).fill(0);
+            const monthlyVatOut = Array(12).fill(0);
+            const monthlyVatIn = Array(12).fill(0);
+
+            allProjects.forEach(project => {
+                (project.items || []).forEach(item => {
+                    const issueDate = new Date(item.issueDate);
+                    const dueDate = new Date(issueDate.getTime()); 
+                    dueDate.setDate(dueDate.getDate() + parseInt(item.dueDateDays));
+                    
+                    if (dueDate.getFullYear() === displayedYear) {
+                        const dueMonth = dueDate.getMonth();
+                        const price = parseFloat(item.price) || 0;
+                        const externalCost = parseFloat(item.externalCost) || 0;
+                        const vatRate = parseFloat(item.vatRate) || 0;
+
+                        monthlyIncome[dueMonth] += price;
+                        monthlyVatOut[dueMonth] += price * (vatRate / 100);
+
+                        if (!showGrossRevenue) {
+                            monthlyCosts[dueMonth] += externalCost;
+                            monthlyVatIn[dueMonth] += externalCost * (vatRate / 100);
+                        }
+                    }
+                });
+            });
+
+            if (!showGrossRevenue) { 
+                for (let i = 0; i < 12; i++) {
+                    fixedCosts.forEach(cost => {
+                        const costAmount = parseFloat(cost.amount) || 0;
+                        const vatRate = parseFloat(cost.vatRate) || 0;
+                        monthlyCosts[i] += costAmount;
+                        monthlyVatIn[i] += costAmount * (vatRate / 100);
+                    });
+                }
+            }
+
+            for (let i = 0; i < 12; i++) {
+                 monthlyProfit[i] = monthlyIncome[i] - monthlyCosts[i];
+            }
+            
+            return { monthlyIncome, monthlyCosts, monthlyProfit, monthlyVatIn, monthlyVatOut };
+        };
+
+        const generateCustomLegend = (chart) => {
+            const legendContainer = document.getElementById('custom-legend');
+            legendContainer.innerHTML = '';
+            chart.data.datasets.forEach((dataset, index) => {
+                const legendItem = document.createElement('div');
+                const isHidden = !chart.isDatasetVisible(index);
+                
+                legendItem.className = 'flex items-center cursor-pointer px-3 py-1';
+                legendItem.style.color = dataset.borderColor;
+                legendItem.style.opacity = isHidden ? '0.5' : '1';
+                
+                const text = document.createElement('span');
+                text.textContent = dataset.label;
+                if(isHidden) {
+                    text.style.textDecoration = 'line-through';
+                }
+                legendItem.appendChild(text);
+
+                legendItem.onclick = () => {
+                    chart.toggleDataVisibility(index);
+                    chart.update();
+                };
+                
+                legendContainer.appendChild(legendItem);
+            });
+        };
+
+        const renderChart = () => {
+            const { monthlyIncome, monthlyCosts, monthlyProfit } = calculateMonthlyData();
+            const chartCanvas = document.getElementById('cashflowChart');
+
+            if (cashflowChart) {
+                cashflowChart.destroy();
+            }
+            
+            Chart.defaults.font.family = "'Fira Mono', monospace";
+
+            cashflowChart = new Chart(chartCanvas, {
+                type: 'line',
+                data: {
+                    labels: MONTH_NAMES,
+                    datasets: [
+                        {
+                            label: 'PŘÍJMY',
+                            data: monthlyIncome,
+                            borderColor: '#4ade80', // green-400
+                            backgroundColor: 'rgba(74, 222, 128, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'NÁKLADY',
+                            data: monthlyCosts,
+                            borderColor: '#f87171', // red-400
+                            backgroundColor: 'rgba(248, 113, 113, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'ZISK',
+                            data: monthlyProfit,
+                            borderColor: '#ffffff', // white
+                            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                            fill: false,
+                            tension: 0.4,
+                            borderWidth: 3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                           display: false // We use custom legend
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += formatCurrency(context.parsed.y);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            ticks: { 
+                                color: '#9ca3af', // gray-400
+                                callback: function(value) {
+                                    return value / 1000 + 'K';
+                                }
+                             }, 
+                            grid: { color: '#374151' } // gray-700
+                        },
+                        x: {
+                            ticks: { color: '#9ca3af' }, // gray-400
+                            grid: { color: '#374151' } // gray-700
+                        }
+                    },
+                    onHover: (event, chartElement) => {
+                        event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
+                    },
+                    animation: {
+                        onComplete: () => {
+                            generateCustomLegend(cashflowChart);
+                        }
+                    }
+                }
+            });
+        };
+
+        const renderVatSummary = () => {
+            const { monthlyVatIn, monthlyVatOut } = calculateMonthlyData();
+            const vatSummaryContainer = document.getElementById('vatSummaryContainer');
+            
+            let tableHTML = `
+                <table class="w-full text-left text-white">
+                    <thead>
+                        <tr class="border-b border-gray-700">
+                            <th class="py-2 px-3">MĚSÍC</th>
+                            <th class="py-2 px-3 text-right">DPH VÝSTUP</th>
+                            <th class="py-2 px-3 text-right">DPH VSTUP</th>
+                            <th class="py-2 px-3 text-right">PLATBA/VRATKA</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            monthlyVatOut.forEach((vatOut, index) => {
+                const vatIn = monthlyVatIn[index];
+                const liability = vatOut - vatIn;
+                const textColorClass = liability < 0 ? 'text-green-400' : 'text-red-400';
+                tableHTML += `
+                    <tr class="border-b border-gray-800">
+                        <td class="py-2 px-3">${MONTH_NAMES[index]}</td>
+                        <td class="py-2 px-3 text-right">${formatCurrency(vatOut)}</td>
+                        <td class="py-2 px-3 text-right">${formatCurrency(vatIn)}</td>
+                        <td class="py-2 px-3 text-right ${textColorClass}">${formatCurrency(liability)}</td>
+                    </tr>
+                `;
+            });
+
+            const totalVatOut = monthlyVatOut.reduce((a, b) => a + b, 0);
+            const totalVatIn = monthlyVatIn.reduce((a, b) => a + b, 0);
+            const totalLiability = totalVatOut - totalVatIn;
+            const totalTextColorClass = totalLiability < 0 ? 'text-green-400' : 'text-red-400';
+
+            tableHTML += `
+                    </tbody>
+                    <tfoot class="font-bold">
+                        <tr>
+                            <td class="py-2 px-3">CELKEM</td>
+                            <td class="py-2 px-3 text-right">${formatCurrency(totalVatOut)}</td>
+                            <td class="py-2 px-3 text-right">${formatCurrency(totalVatIn)}</td>
+                            <td class="py-2 px-3 text-right ${totalTextColorClass}">${formatCurrency(totalLiability)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            `;
+            vatSummaryContainer.innerHTML = tableHTML;
+        };
+
+        const renderProjects = () => {
+            let projectsToRender = allProjects;
+            const projectsListContainer = document.getElementById('projectsListContainer');
+            const noProjectsEl = document.getElementById('noProjects');
+
+            // Apply search filter if there's a search term
+            if (currentSearchTerm) {
+                const lowerCaseTerm = currentSearchTerm.toLowerCase();
+                projectsToRender = projectsToRender.filter(project => {
+                    const clientMatch = project.clientName.toLowerCase().includes(lowerCaseTerm);
+                    const projectMatch = project.projectName.toLowerCase().includes(lowerCaseTerm);
+                    const itemMatch = (project.items || []).some(item => item.name.toLowerCase().includes(lowerCaseTerm) || (item.description && item.description.toLowerCase().includes(lowerCaseTerm)));
+                    return clientMatch || projectMatch || itemMatch;
+                });
+            } else {
+                // Apply year and month filters only if there is no search
+                projectsToRender = projectsToRender.map(project => {
+                    const matchingItems = (project.items || []).filter(item => {
+                        const issueDate = new Date(item.issueDate);
+                        const dueDate = new Date(issueDate.getTime());
+                        dueDate.setDate(dueDate.getDate() + parseInt(item.dueDateDays));
+                        
+                        const isYearMatch = dueDate.getFullYear() === displayedYear;
+                        const isMonthMatch = selectedMonth === null || dueDate.getMonth() === selectedMonth;
+                        
+                        return isYearMatch && isMonthMatch;
+                    });
+
+                    if (matchingItems.length > 0) {
+                        return { ...project, items: matchingItems };
+                    }
+                    return null;
+                }).filter(p => p !== null);
+            }
+            
+            const getLatestIssueDate = (project) => {
+                if (!project.items || project.items.length === 0) return new Date(0);
+                const dates = project.items.map(item => new Date(item.issueDate));
+                return new Date(Math.max.apply(null, dates));
+            };
+
+            const projectsByClient = projectsToRender.reduce((acc, project) => {
+                const clientName = project.clientName || 'NEZAŘAZENÝ KLIENT';
+                if (!acc[clientName]) {
+                    acc[clientName] = [];
+                }
+                acc[clientName].push(project);
+                return acc;
+            }, {});
+
+            const clientGroups = Object.keys(projectsByClient).map(clientName => ({
+                clientName,
+                projects: projectsByClient[clientName],
+                latestDate: Math.max(...projectsByClient[clientName].map(p => getLatestIssueDate(p)))
+            }));
+
+
+            if (currentSortOrder === 'newest') {
+                clientGroups.sort((a, b) => b.latestDate - a.latestDate);
+            } else if (currentSortOrder === 'client') {
+                clientGroups.sort((a, b) => a.clientName.localeCompare(b.clientName));
+            }
+
+            projectsListContainer.innerHTML = '';
+            if (clientGroups.length === 0) {
+                noProjectsEl.classList.remove('hidden');
+                return;
+            }
+            
+            noProjectsEl.classList.add('hidden');
+
+            clientGroups.forEach(group => {
+                const sortedProjects = group.projects.sort((a, b) => getLatestIssueDate(b) - getLatestIssueDate(a));
+                renderClientSection(group.clientName, sortedProjects);
+            });
+        };
+
+        const renderClientSection = (clientName, clientProjects) => {
+            const projectsListContainer = document.getElementById('projectsListContainer');
+            const clientSection = document.createElement('div');
+            clientSection.className = 'mb-6';
+            clientSection.dataset.clientGroup = clientName;
+
+            const clientHeader = document.createElement('div');
+            clientHeader.className = 'flex items-center justify-between mb-3';
+            clientHeader.innerHTML = `
+                <div class="flex items-center space-x-2 client-name-wrapper">
+                    <div class="client-name-display flex items-center space-x-2">
+                        <h2 class="text-gray-800">${clientName}</h2>
+                        <button class="editClientBtn text-gray-400 hover:text-black p-1 rounded-md transition-colors" title="UPRAVIT NÁZEV KLIENTA">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
+                            </button>
+                        </div>
+                        <div class="client-name-edit hidden flex items-center space-x-2">
+                            <input type="text" class="px-2 py-1.5 text-xs bg-white border border-gray-300 rounded-md" value="${clientName}" />
+                            <button class="saveClientBtn bg-black text-white px-3 py-1 rounded-md">ULOŽIT</button>
+                            <button class="cancelEditClientBtn text-gray-500 hover:text-black px-3 py-1 rounded-md">ZRUŠIT</button>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button class="exportClientBtn text-gray-400 hover:text-black p-1 rounded-md transition-colors" title="EXPORTOVAT DO CSV" data-client-name="${clientName}">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                        </button>
+                        <button class="copyClientBtn bg-gray-200 text-gray-700 hover:bg-gray-300 w-7 h-7 flex items-center justify-center rounded-md transition-colors" title="KOPÍROVAT KLIENTA" data-client-name="${clientName}">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
+                `;
+            clientSection.appendChild(clientHeader);
+
+            const clientProjectsList = document.createElement('div');
+            clientProjectsList.className = 'space-y-3';
+            clientProjects.forEach(project => renderProjectCard(project, clientProjectsList));
+            clientSection.appendChild(clientProjectsList);
+            projectsListContainer.appendChild(clientSection);
+        };
+
+        const renderProjectCard = (project, container) => {
+            const projectCard = document.createElement('div');
+            projectCard.className = 'bg-white rounded-md shadow-sm overflow-hidden';
+            projectCard.dataset.id = project.id; 
+            projectCard.dataset.clientName = project.clientName;
+            projectCard.dataset.projectName = project.projectName;
+
+
+            const totalProjectValue = (project.items || []).reduce((sum, item) => {
+                const revenue = showGrossRevenue ? (parseFloat(item.price) || 0) : (parseFloat(item.price) || 0) - (parseFloat(item.externalCost) || 0);
+                return sum + revenue;
+            }, 0);
+
+            projectCard.innerHTML = `
+                <div class="p-4 flex justify-between items-start">
+                    <div>
+                        <p class="text-gray-800">${project.projectName}</p>
+                    </div>
+                    <div class="text-right flex-shrink-0 ml-4">
+                        <p class="text-gray-800">${formatCurrency(totalProjectValue)}</p>
+                        <div class="flex items-center justify-end space-x-2 mt-2">
+                             <button class="editBtn text-gray-400 hover:text-black p-1 rounded-md transition-colors" title="UPRAVIT PROJEKT">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
+                            </button>
+                            <button class="deleteBtn text-gray-400 hover:text-red-600 p-1 rounded-md transition-colors" title="SMAZAT PROJEKT">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 border-t border-gray-200">
+                    <ul class="space-y-1">
+                        ${(project.items || []).map(item => `
+                            <li class="project-item" data-item-id="${item.id}">
+                                <div class="item-header flex justify-between items-center cursor-pointer p-1 rounded-md hover:bg-gray-100">
+                                    <div class="flex items-center space-x-2">
+                                        <svg class="item-arrow w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                        <span class="text-gray-700">${item.name}</span>
+                                    </div>
+                                    <span class="text-gray-700">${formatCurrency((parseFloat(item.price) || 0) - (parseFloat(item.externalCost) || 0))}</span>
+                                </div>
+                                ${(item.externalCost || 0) > 0 ? `
+                                    <div class="pl-6 text-red-600 text-xs normal-case flex justify-between">
+                                        <span>- ${item.externalCostName || 'EXTERNÍ NÁKLAD'}</span>
+                                        <span>-${formatCurrency(item.externalCost)}</span>
+                                    </div>
+                                ` : ''}
+                                <div class="item-description-wrapper hidden mt-2 pl-6">
+                                    <textarea class="w-full p-2 text-xs normal-case border border-gray-200 rounded-md" rows="3" maxlength="300" placeholder="PŘIDAT POZNÁMKU...">${item.description || ''}</textarea>
+                                </div>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `;
+            container.appendChild(projectCard);
+        };
+
+        const renderFixedCosts = () => {
+            const fixed = fixedCosts;
+            const fixedCostsList = document.getElementById('fixedCostsList');
+            fixedCostsList.innerHTML = '';
+            fixed.forEach((cost, index) => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center space-x-4';
+                div.innerHTML = `
+                    <input type="text" value="${cost.name}" data-index="${index}" name="fixedCostName" class="w-1/2 px-3 py-1.5 bg-white border border-gray-300 rounded-md" placeholder="Název nákladu">
+                    <input type="number" value="${cost.amount}" data-index="${index}" name="fixedCostAmount" class="w-1/2 px-3 py-1.5 bg-white border border-gray-300 rounded-md" placeholder="Částka">
+                    <select name="fixedVatRate" data-index="${index}" class="px-3 py-1.5 bg-white border border-gray-300 rounded-md">
+                        <option value="21" ${cost.vatRate === 21 ? 'selected' : ''}>21%</option>
+                        <option value="15" ${cost.vatRate === 15 ? 'selected' : ''}>15%</option>
+                        <option value="0" ${cost.vatRate === 0 ? 'selected' : ''}>0%</option>
+                    </select>
+                    <button class="removeFixedCostBtn text-red-500 hover:text-red-700" data-index="${index}">&times;</button>
+                `;
+                fixedCostsList.appendChild(div);
+            });
+        };
+
+        const handleSaveProject = async (e) => {
+            e.preventDefault();
+            const projectForm = document.getElementById('projectForm');
+            const formData = new FormData(projectForm);
+            const clientName = formData.get('clientName');
+            const projectName = formData.get('projectName');
+            const projectKey = document.getElementById('projectId').value;
+
+            const itemElements = document.getElementById('projectItemsContainer').querySelectorAll('[data-item-id]');
+            const newItems = [];
+            itemElements.forEach(itemEl => {
+                newItems.push({
+                    id: itemEl.dataset.itemId,
+                    name: itemEl.querySelector('[name="itemName"]').value,
+                    price: parseFloat(itemEl.querySelector('[name="itemPrice"]').value) || 0,
+                    externalCostName: itemEl.querySelector('[name="itemExternalCostName"]').value,
+                    externalCost: parseFloat(itemEl.querySelector('[name="itemExternalCost"]').value) || 0,
+                    issueDate: itemEl.querySelector('[name="itemIssueDate"]').value,
+                    dueDateDays: parseInt(itemEl.querySelector('[name="itemDueDateDays"]').value) || 14,
+                    description: itemEl.querySelector('[name="itemDescription"]').value,
+                    vatRate: parseInt(itemEl.querySelector('[name="itemVatRate"]').value)
+                });
+            });
+            
+            const projectData = {
+                clientName,
+                projectName,
+                items: newItems,
+                latestIssueDate: newItems.length > 0 ? new Date(Math.max.apply(null, newItems.map(item => new Date(item.issueDate)))) : new Date()
+            };
+
+            if (projectKey) { // Editing existing project
+                const projectRef = doc(projectsCollectionRef, projectKey);
+                await updateDoc(projectRef, projectData);
+            } else { // Adding new project
+                await addDoc(projectsCollectionRef, projectData);
+            }
+            
+            closeModal();
+        };
+
+        const handleEditProject = (project) => {
+            if (!project) return;
+            
+            resetForm();
+            document.getElementById('projectId').value = project.id;
+            document.getElementById('clientName').value = project.clientName;
+            document.getElementById('projectName').value = project.projectName;
+            
+            document.getElementById('projectItemsContainer').innerHTML = '';
+            (project.items || []).forEach(item => createItemRow(item));
+
+            document.getElementById('modalTitle').textContent = 'UPRAVIT PROJEKT';
+            openModal();
+        };
+
+        const handleDeleteProject = async (id) => {
+             await deleteDoc(doc(projectsCollectionRef, id));
+        };
+        
+        const handleCopyClient = async (clientName) => {
+            const projectsToCopy = allProjects.filter(p => p.clientName === clientName);
+            if(projectsToCopy.length === 0) return;
+
+            const baseName = clientName.replace(/\s\(\d+\)$/, '').trim();
+            const existingClientNames = new Set(allProjects.map(p => p.clientName));
+            let copyCounter = 2;
+            let newClientName = `${baseName} (${copyCounter})`;
+
+            while (existingClientNames.has(newClientName)) {
+                copyCounter++;
+                newClientName = `${baseName} (${copyCounter})`;
+            }
+            
+            const batch = writeBatch(db);
+            projectsToCopy.forEach(project => {
+                const newProject = JSON.parse(JSON.stringify(project));
+                delete newProject.id;
+                newProject.clientName = newClientName;
+                newProject.items.forEach(item => {
+                    item.id = crypto.randomUUID();
+                });
+                const newProjectRef = doc(collection(db, `users/${userId}/projects`));
+                batch.set(newProjectRef, newProject);
+            });
+            await batch.commit();
+        };
+
+        const handleUpdateClientName = async (oldName, newName) => {
+            if (!newName || oldName === newName) return;
+            
+            const batch = writeBatch(db);
+            const projectsToUpdate = allProjects.filter(p => p.clientName === oldName);
+            projectsToUpdate.forEach(project => {
+                const projectRef = doc(projectsCollectionRef, project.id);
+                batch.update(projectRef, { clientName: newName });
+            });
+            await batch.commit();
+        };
+
+        const handleExportClient = (clientName) => {
+            const projectsToExport = allProjects.filter(p => p.clientName === clientName);
+            if (projectsToExport.length === 0) return;
+
+            let csvContent = "\uFEFF"; // BOM for UTF-8
+            const headers = ["Klient", "Projekt", "Položka", "Cena", "Datum vystavení", "Datum splatnosti", "Popis"];
+            csvContent += headers.join(";") + "\r\n";
+
+            projectsToExport.forEach(project => {
+                project.items.forEach(item => {
+                    const issueDate = new Date(item.issueDate);
+                    const dueDate = new Date(issueDate.getTime());
+                    dueDate.setDate(dueDate.getDate() + parseInt(item.dueDateDays));
+                    const formattedDueDate = dueDate.toISOString().split('T')[0];
+
+                    const row = [
+                        `"${project.clientName.replace(/"/g, '""')}"`,
+                        `"${project.projectName.replace(/"/g, '""')}"`,
+                        `"${item.name.replace(/"/g, '""')}"`,
+                        item.price || 0,
+                        item.issueDate,
+                        formattedDueDate,
+                        `"${(item.description || '').replace(/"/g, '""')}"`
+                    ];
+                    csvContent += row.join(";") + "\r\n";
+                });
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            const sanitizedClientName = clientName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            const exportDate = new Date().toISOString().split('T')[0];
+            link.setAttribute("download", `export_${sanitizedClientName}_${exportDate}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        const initStickyHeader = () => {
+            const stickyHeaderContainer = document.getElementById('sticky-header-container');
+            const headerPlaceholder = document.getElementById('header-placeholder');
+            const offsetTop = stickyHeaderContainer.offsetTop;
+
+            window.onscroll = () => {
+                if (window.innerWidth >= 640) { // Only for sm screens and up
+                    if (window.pageYOffset > offsetTop) {
+                        if (!stickyHeaderContainer.classList.contains('is-sticky')) {
+                            headerPlaceholder.style.height = stickyHeaderContainer.offsetHeight + 'px';
+                            stickyHeaderContainer.classList.add('is-sticky');
+                        }
+                    } else {
+                        if (stickyHeaderContainer.classList.contains('is-sticky')) {
+                            stickyHeaderContainer.classList.remove('is-sticky');
+                            headerPlaceholder.style.height = '0px';
+                        }
+                    }
+                }
+            };
+        };
+        
+        const renderAll = () => {
+            renderTimeline();
+            renderProjects();
+            renderFixedCosts();
+        };
+
+        const initializeAppEventListeners = () => {
+            if (isAppInitialized) return;
+            
+            document.getElementById('addProjectBtn').addEventListener('click', () => {
+                 resetForm();
+                 openModal();
+            });
+            document.getElementById('cancelModalBtn').addEventListener('click', closeModal);
+            document.getElementById('projectForm').addEventListener('submit', handleSaveProject);
+            document.getElementById('addItemBtn').addEventListener('click', addItemRow);
+            
+            document.getElementById('projectItemsContainer').addEventListener('click', (e) => {
+                if (e.target.closest('.removeItemBtn')) {
+                    e.target.closest('[data-item-id]').remove();
+                }
+            });
+
+            document.addEventListener('keydown', (e) => {
+                const projectModal = document.getElementById('projectModal');
+                if (!projectModal.classList.contains('hidden')) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        document.getElementById('projectForm').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                    } else if (e.key === 'Escape') {
+                        closeModal();
+                    }
+                }
+            });
+
+            document.getElementById('projectsListContainer').addEventListener('click', (e) => {
+                const projectCard = e.target.closest('[data-id]');
+                const clientGroup = e.target.closest('[data-client-group]');
+                const itemHeader = e.target.closest('.item-header');
+
+                if (itemHeader) {
+                    const projectItem = itemHeader.closest('.project-item');
+                    const wrapper = projectItem.querySelector('.item-description-wrapper');
+                    if (wrapper) {
+                        projectItem.classList.toggle('item-expanded');
+                        wrapper.classList.toggle('hidden');
+                    }
+                    return; 
+                }
+                
+                if (!clientGroup && !projectCard) return;
+
+                if (clientGroup) {
+                    const copyButton = e.target.closest('.copyClientBtn');
+                    const editButton = e.target.closest('.editClientBtn');
+                    const saveButton = e.target.closest('.saveClientBtn');
+                    const cancelButton = e.target.closest('.cancelEditClientBtn');
+                    const exportButton = e.target.closest('.exportClientBtn');
+                    const nameWrapper = clientGroup.querySelector('.client-name-wrapper');
+                    const displayDiv = nameWrapper.querySelector('.client-name-display');
+                    const editDiv = nameWrapper.querySelector('.client-name-edit');
+
+                    if (exportButton) {
+                        const clientName = exportButton.dataset.clientName;
+                        handleExportClient(clientName);
+                        return;
+                    }
+                    if (copyButton) {
+                        const clientName = copyButton.dataset.clientName;
+                        handleCopyClient(clientName);
+                        return;
+                    }
+                    if (editButton) {
+                        displayDiv.classList.add('hidden');
+                        editDiv.classList.remove('hidden');
+                        const input = editDiv.querySelector('input');
+                        input.focus();
+                        input.select();
+                        input.onkeydown = (e) => {
+                            if (e.key === 'Enter') {
+                                const oldName = clientGroup.dataset.clientGroup;
+                                const newName = input.value.trim();
+                                handleUpdateClientName(oldName, newName);
+                            } else if (e.key === 'Escape') {
+                                displayDiv.classList.remove('hidden');
+                                editDiv.classList.add('hidden');
+                                input.value = clientGroup.dataset.clientGroup; // Reset value
+                            }
+                        };
+                        return;
+                    }
+                    if (saveButton) {
+                        const oldName = clientGroup.dataset.clientGroup;
+                        const newName = editDiv.querySelector('input').value.trim();
+                        handleUpdateClientName(oldName, newName);
+                        return;
+                    }
+                    if (cancelButton) {
+                        displayDiv.classList.remove('hidden');
+                        editDiv.classList.add('hidden');
+                        editDiv.querySelector('input').value = clientGroup.dataset.clientGroup;
+                        return;
+                    }
+                }
+                
+                if (projectCard) {
+                    const project = allProjects.find(p => p.id === projectCard.dataset.id);
+                    if (e.target.closest('.editBtn')) {
+                        handleEditProject(project);
+                    }
+                    if (e.target.closest('.deleteBtn')) {
+                        handleDeleteProject(project.id);
+                    }
+                }
+            });
+
+            document.getElementById('prevYearBtn').addEventListener('click', () => {
+                displayedYear--;
+                selectedMonth = null;
+                renderAll();
+            });
+
+            document.getElementById('nextYearBtn').addEventListener('click', () => {
+                displayedYear++;
+                selectedMonth = null;
+                renderAll();
+            });
+
+            document.getElementById('timeline').addEventListener('click', (e) => {
+                const monthEl = e.target.closest('[data-month-index]');
+                if (!monthEl) return;
+
+                const monthIndex = parseInt(monthEl.dataset.monthIndex, 10);
+
+                if (selectedMonth === monthIndex) {
+                    selectedMonth = null;
+                } else {
+                    selectedMonth = monthIndex;
+                }
+                document.getElementById('searchInput').value = '';
+                currentSearchTerm = '';
+                renderAll();
+            });
+            
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                currentSearchTerm = e.target.value;
+                renderProjects(allProjects);
+            });
+
+            document.getElementById('fixedCostsBtn').addEventListener('click', () => {
+                isFixedCostsMode = !isFixedCostsMode;
+                document.getElementById('projectsListContainer').classList.toggle('hidden', isFixedCostsMode);
+                document.getElementById('fixedCostsContainer').classList.toggle('hidden', !isFixedCostsMode);
+                document.getElementById('fixedCostsBtn').textContent = isFixedCostsMode ? 'ZOBRAZIT PROJEKTY' : 'FIXNÍ NÁKLADY';
+                renderTimeline();
+            });
+
+            document.getElementById('addFixedCostBtn').addEventListener('click', async () => {
+                const newFixedCosts = [...fixedCosts, { id: crypto.randomUUID(), name: '', amount: 0, vatRate: 21 }];
+                await setDoc(fixedCostsDocRef, { costs: newFixedCosts });
+            });
+
+            document.getElementById('fixedCostsList').addEventListener('change', (e) => {
+                const index = e.target.dataset.index;
+                const value = e.target.value;
+                const name = e.target.name;
+                const updatedFixedCosts = [...fixedCosts];
+                if (name === 'fixedCostName') {
+                    updatedFixedCosts[index].name = value;
+                } else if (name === 'fixedCostAmount') {
+                    updatedFixedCosts[index].amount = parseFloat(value) || 0;
+                } else if (name === 'fixedVatRate') {
+                    updatedFixedCosts[index].vatRate = parseInt(value);
+                }
+                setDoc(fixedCostsDocRef, { costs: updatedFixedCosts });
+            });
+
+            document.getElementById('fixedCostsList').addEventListener('click', (e) => {
+                if (e.target.classList.contains('removeFixedCostBtn')) {
+                    const index = e.target.dataset.index;
+                    const updatedFixedCosts = [...fixedCosts];
+                    updatedFixedCosts.splice(index, 1);
+                    setDoc(fixedCostsDocRef, { costs: updatedFixedCosts });
+                }
+            });
+
+            document.getElementById('costsToggleBtn').addEventListener('click', () => {
+                showGrossRevenue = !showGrossRevenue;
+                document.getElementById('costsToggleBtn').textContent = showGrossRevenue ? 'S NÁKLADY' : 'BEZ NÁKLADŮ';
+                renderAll();
+            });
+            
+            document.getElementById('viewToggleBtn').addEventListener('click', () => {
+                isChartView = !isChartView;
+                document.getElementById('timeline').classList.toggle('hidden', isChartView);
+                document.getElementById('chartContainer').classList.toggle('hidden', !isChartView);
+                document.getElementById('vatSummaryContainer').classList.add('hidden');
+                isVatView = false;
+                document.getElementById('vatToggleBtn').textContent = 'PŘEHLED DPH';
+                document.getElementById('costsToggleBtn').classList.remove('hidden');
+                document.getElementById('viewToggleBtn').textContent = isChartView ? 'PŘEHLED' : 'GRAF';
+                renderTimeline();
+            });
+
+            document.getElementById('vatToggleBtn').addEventListener('click', () => {
+                isVatView = !isVatView;
+                document.getElementById('timeline').classList.toggle('hidden', isVatView);
+                document.getElementById('chartContainer').classList.add('hidden');
+                isChartView = false;
+                document.getElementById('vatSummaryContainer').classList.toggle('hidden', !isVatView);
+                document.getElementById('viewToggleBtn').textContent = 'GRAF';
+                document.getElementById('costsToggleBtn').classList.toggle('hidden', isVatView);
+                renderTimeline();
+            });
+
+            document.getElementById('sortOrder').addEventListener('change', (e) => {
+                currentSortOrder = e.target.value;
+                renderProjects(allProjects);
+            });
+
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                signOut(auth);
+            });
+
+            isAppInitialized = true;
+        };
+
+        // --- Firebase Setup ---
+        try {
+            const firebaseConfig = {
+              apiKey: "AIzaSyCHhHB-iW-9aF0Qu_2CBHMvN9XeCmiL4qs",
+              authDomain: "cashflow-planner-83b6c.firebaseapp.com",
+              projectId: "cashflow-planner-83b6c",
+              storageBucket: "cashflow-planner-83b6c.appspot.com",
+              messagingSenderId: "824885342764",
+              appId: "1:824885342764:web:917f03cf3b2194be5f1789"
+            };
+
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+
+            onAuthStateChanged(auth, async user => {
+                if (user) {
+                    userId = user.uid;
+                    
+                    authContainer.classList.add('hidden');
+                    appContainer.classList.remove('hidden');
+                    loadingEl.classList.add('hidden');
+                    document.getElementById('mainContent').classList.remove('hidden');
+
+                    initializeAppEventListeners();
+                    initStickyHeader();
+
+                    projectsCollectionRef = collection(db, `users/${userId}/projects`);
+                    fixedCostsDocRef = doc(db, `users/${userId}/costs/fixed`);
+
+                    if (unsubscribeProjects) unsubscribeProjects();
+                    unsubscribeProjects = onSnapshot(projectsCollectionRef, (snapshot) => {
+                        allProjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        renderAll();
+                    }, (error) => {
+                        console.error("Chyba při načítání projektů: ", error);
+                    });
+
+                    if (unsubscribeFixedCosts) unsubscribeFixedCosts();
+                    unsubscribeFixedCosts = onSnapshot(fixedCostsDocRef, (doc) => {
+                        fixedCosts = doc.exists() ? doc.data().costs : [];
+                        renderAll();
+                    }, (error) => {
+                        console.error("Chyba při načítání fixních nákladů: ", error);
+                    });
+
+                } else {
+                     authContainer.classList.remove('hidden');
+                     appContainer.classList.add('hidden');
+                     loadingEl.classList.add('hidden');
+                     document.getElementById('mainContent').classList.add('hidden');
+                     if(unsubscribeProjects) unsubscribeProjects();
+                     if(unsubscribeFixedCosts) unsubscribeFixedCosts();
+                     isAppInitialized = false;
+                }
+            });
+        } catch (e) {
+            console.error("Chyba konfigurace Firebase:", e);
+            loadingEl.innerHTML = `<p class="text-red-500 font-bold">CHYBA KONFIGURACE: Vložte prosím konfigurační údaje z Firebase do souboru index.html.</p>`;
+        }
+
+
+        // --- Auth Event Listeners ---
+        const authFormView = document.getElementById('authFormView');
+        const authInitialView = document.getElementById('authInitialView');
+        const authFormTitle = document.getElementById('authFormTitle');
+        const authActionBtn = document.getElementById('authActionBtn');
+        const forgotPasswordLink = document.getElementById('forgotPasswordLink');
+
+        document.getElementById('showLoginBtn').addEventListener('click', () => {
+            authInitialView.classList.add('hidden');
+            authFormView.classList.remove('hidden');
+            authFormTitle.textContent = 'PŘIHLÁŠENÍ';
+            authActionBtn.textContent = 'PŘIHLÁSIT SE';
+            authActionBtn.onclick = handleLogin;
+            forgotPasswordLink.classList.remove('hidden');
+        });
+
+        document.getElementById('showRegisterBtn').addEventListener('click', () => {
+            authInitialView.classList.add('hidden');
+            authFormView.classList.remove('hidden');
+            authFormTitle.textContent = 'REGISTRACE';
+            authActionBtn.textContent = 'REGISTROVAT';
+            authActionBtn.onclick = handleRegister;
+            forgotPasswordLink.classList.add('hidden');
+        });
+
+        document.getElementById('backToAuthInitialBtn').addEventListener('click', () => {
+            authFormView.classList.add('hidden');
+            authInitialView.classList.remove('hidden');
+            document.getElementById('authError').classList.add('hidden');
+            document.getElementById('authSuccess').classList.add('hidden');
+        });
+
+        const handleLogin = async () => {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const authErrorEl = document.getElementById('authError');
+            authErrorEl.classList.add('hidden');
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+            } catch (error) {
+                authErrorEl.textContent = "Chyba přihlášení: " + error.message;
+                authErrorEl.classList.remove('hidden');
+            }
+        };
+
+        const handleRegister = async () => {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const authErrorEl = document.getElementById('authError');
+            authErrorEl.classList.add('hidden');
+            try {
+                await createUserWithEmailAndPassword(auth, email, password);
+            } catch (error) {
+                authErrorEl.textContent = "Chyba registrace: " + error.message;
+                authErrorEl.classList.remove('hidden');
+            }
+        };
+        
+        forgotPasswordLink.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const authErrorEl = document.getElementById('authError');
+            const authSuccessEl = document.getElementById('authSuccess');
+            authErrorEl.classList.add('hidden');
+            authSuccessEl.classList.add('hidden');
+
+            if (!email) {
+                authErrorEl.textContent = "Zadejte prosím vaši e-mailovou adresu.";
+                authErrorEl.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                await sendPasswordResetEmail(auth, email);
+                authSuccessEl.textContent = "Odkaz pro obnovu hesla byl odeslán na váš e-mail.";
+                authSuccessEl.classList.remove('hidden');
+            } catch (error) {
+                 authErrorEl.textContent = "Chyba: " + error.message;
+                 authErrorEl.classList.remove('hidden');
+            }
+        });
+        
+    </script>
+</body>
+</html>
