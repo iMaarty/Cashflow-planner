@@ -160,7 +160,7 @@
         <div class="container mx-auto p-4 sm:p-6 lg:p-8">
             <!-- Loading Indicator -->
             <div id="loading" class="text-center py-10">
-                <p class="text-gray-500">NAČÍTÁNÍ DAT...</p>
+                <p class="text-gray-500">PŘIPOJOVÁNÍ K DATABÁZI...</p>
             </div>
 
             <!-- Main Content (hidden until data is loaded) -->
@@ -226,10 +226,12 @@
     </div>
 
     <script type="module">
+        // Import Firebase services
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, onSnapshot, addDoc, setDoc, deleteDoc, writeBatch, getDocs, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, doc, onSnapshot, addDoc, setDoc, deleteDoc, writeBatch, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // Global variables
         let allProjects = []; 
         let fixedCosts = [];
         let displayedYear = new Date().getFullYear();
@@ -241,15 +243,18 @@
         let cashflowChart = null;
         let isVatView = false;
         let currentSortOrder = 'newest';
+        
+        // Firebase specific variables
         let userId = null;
+        let db;
         let projectsCollectionRef = null;
         let fixedCostsDocRef = null;
         let unsubscribeProjects = null;
         let unsubscribeFixedCosts = null;
-        let db;
 
         const MONTH_NAMES = ["LED", "ÚNO", "BŘE", "DUB", "KVĚ", "ČVN", "ČVC", "SRP", "ZÁŘ", "ŘÍJ", "LIS", "PRO"];
         
+        // DOM Elements
         const appContainer = document.getElementById('app');
         const addProjectBtn = document.getElementById('addProjectBtn');
         const projectModal = document.getElementById('projectModal');
@@ -984,27 +989,34 @@
 
         // --- Firebase Setup ---
         try {
+            // Vložte zde konfigurační objekt z vašeho Firebase projektu
             const firebaseConfig = {
               apiKey: "AIzaSyCHhHB-iW-9aF0Qu_2CBHMvN9XeCmiL4qs",
               authDomain: "cashflow-planner-83b6c.firebaseapp.com",
               projectId: "cashflow-planner-83b6c",
-              storageBucket: "cashflow-planner-83b6c.appspot.com",
+              storageBucket: "cashflow-planner-83b6c.firebasestorage.app",
               messagingSenderId: "824885342764",
               appId: "1:824885342764:web:917f03cf3b2194be5f1789"
             };
 
+            // Initialize Firebase
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             const auth = getAuth(app);
 
+            // Authentication state listener
             onAuthStateChanged(auth, async user => {
                 if (user) {
+                    // User is signed in.
                     userId = user.uid;
                     
+                    // Set up Firestore references
                     projectsCollectionRef = collection(db, `users/${userId}/projects`);
                     fixedCostsDocRef = doc(db, `users/${userId}/costs/fixed`);
 
+                    // Unsubscribe from previous listeners if they exist
                     if (unsubscribeProjects) unsubscribeProjects();
+                    // Listen for real-time updates on projects
                     unsubscribeProjects = onSnapshot(projectsCollectionRef, (snapshot) => {
                         allProjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         renderAll();
@@ -1012,25 +1024,28 @@
                         mainContentEl.classList.remove('hidden');
                     }, (error) => {
                         console.error("Chyba při načítání projektů: ", error);
-                        loadingEl.innerHTML = `<p class="text-red-500">CHYBA PŘI NAČÍTÁNÍ PROJEKTŮ. ZKONTROLUJTE KONZOLI PRO VÍCE INFORMACÍ.</p>`;
+                        loadingEl.innerHTML = `<p class="text-red-500">CHYBA PŘI NAČÍTÁNÍ PROJEKTŮ. ZKONTROLUJTE KONZOLI.</p>`;
                     });
 
+                    // Unsubscribe from previous listeners if they exist
                     if (unsubscribeFixedCosts) unsubscribeFixedCosts();
+                    // Listen for real-time updates on fixed costs
                     unsubscribeFixedCosts = onSnapshot(fixedCostsDocRef, (doc) => {
                         fixedCosts = doc.exists() ? doc.data().costs : [];
                         renderAll();
                     }, (error) => {
                         console.error("Chyba při načítání fixních nákladů: ", error);
-                        loadingEl.innerHTML = `<p class="text-red-500">CHYBA PŘI NAČÍTÁNÍ NÁKLADŮ. ZKONTROLUJTE KONZOLI PRO VÍCE INFORMACÍ.</p>`;
+                        loadingEl.innerHTML = `<p class="text-red-500">CHYBA PŘI NAČÍTÁNÍ NÁKLADŮ. ZKONTROLUJTE KONZOLI.</p>`;
                     });
 
                 } else {
+                     // User is signed out. Sign in anonymously.
                      await signInAnonymously(auth);
                 }
             });
         } catch (e) {
             console.error("Chyba konfigurace Firebase:", e);
-            loadingEl.innerHTML = `<p class="text-red-500 font-bold">CHYBA KONFIGURACE: Vložte prosím konfigurační údaje z Firebase do souboru index.html.</p>`;
+            loadingEl.innerHTML = `<p class="text-red-500 font-bold">CHYBA KONFIGURACE FIREBASE. ZKONTROLUJTE KONZOLI.</p>`;
         }
 
 
@@ -1051,7 +1066,7 @@
 
         document.addEventListener('keydown', (e) => {
             if (!projectModal.classList.contains('hidden')) {
-                if (e.key === 'Enter') {
+                if (e.key === 'Enter' && e.target.tagName.toLowerCase() !== 'textarea') {
                     e.preventDefault();
                     projectForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
                 } else if (e.key === 'Escape') {
@@ -1131,9 +1146,7 @@
             }
             
             if (projectCard) {
-                const clientName = projectCard.dataset.clientName;
-                const projectName = projectCard.dataset.projectName;
-                const project = allProjects.find(p => p.clientName === clientName && p.projectName === projectName);
+                const project = allProjects.find(p => p.id === projectCard.dataset.id);
 
                 if (e.target.closest('.editBtn')) {
                     handleEditProject(project);
@@ -1176,7 +1189,7 @@
         searchInput.addEventListener('input', (e) => {
             const term = e.target.value;
             currentSearchTerm = term;
-            renderProjects(allProjects);
+            renderProjects();
             
             autocompleteList.innerHTML = '';
             if (!term) {
@@ -1210,7 +1223,7 @@
                         searchInput.value = suggestion;
                         currentSearchTerm = suggestion;
                         autocompleteList.classList.add('hidden');
-                        renderProjects(allProjects);
+                        renderProjects();
                     });
                     autocompleteList.appendChild(item);
                 });
@@ -1229,6 +1242,7 @@
         fixedCostsBtn.addEventListener('click', () => {
             isFixedCostsMode = !isFixedCostsMode;
             projectsListContainer.classList.toggle('hidden', isFixedCostsMode);
+            noProjectsEl.classList.toggle('hidden', isFixedCostsMode);
             fixedCostsContainer.classList.toggle('hidden', !isFixedCostsMode);
             fixedCostsBtn.textContent = isFixedCostsMode ? 'ZOBRAZIT PROJEKTY' : 'FIXNÍ NÁKLADY';
             renderTimeline();
@@ -1294,7 +1308,7 @@
 
         sortOrderSelect.addEventListener('change', (e) => {
             currentSortOrder = e.target.value;
-            renderProjects(allProjects);
+            renderProjects();
         });
         
         // Initial load
