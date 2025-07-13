@@ -867,7 +867,6 @@
                 }
             } catch (error) {
                 console.error("Chyba při ukládání projektu: ", error);
-                alert("Nepodařilo se uložit projekt. Zkontrolujte konzoli pro více detailů.");
             }
             
             closeModal();
@@ -1002,7 +1001,7 @@
 
         // --- ROBUSTNÍ FIREBASE INICIALIZACE ---
 
-        const initFirebase = () => {
+        const initApp = () => {
             try {
                 // DŮLEŽITÉ: Vložte zde konfigurační objekt z vašeho Firebase projektu
                 const firebaseConfig = {
@@ -1014,30 +1013,31 @@
                   appId: "1:824885342764:web:917f03cf3b2194be5f1789"
                 };
 
-                // Inicializace Firebase
+                // Krok 1: Inicializace Firebase
                 const app = initializeApp(firebaseConfig);
                 const auth = getAuth(app);
                 db = getFirestore(app);
+                console.log("Firebase inicializován.");
+                userIdStatusEl.textContent = 'Stav: Inicializováno';
 
-                // Listener na změnu stavu přihlášení. Toto je klíčový mechanismus.
+                // Krok 2: Sledování stavu přihlášení
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
-                        // Uživatel je přihlášen (i anonymně).
-                        console.log("Uživatel úspěšně přihlášen, UID:", user.uid);
+                        // Uživatel je přihlášen.
+                        console.log("Stav ověření: Přihlášen jako", user.uid);
                         userId = user.uid;
-                        userIdStatusEl.textContent = `Stav: Připojeno (ID: ${user.uid})`;
+                        userIdStatusEl.textContent = `Stav: Načítání dat... (ID: ${user.uid.substring(0, 8)}...)`;
                         
-                        // Až TEĎ, když máme userId, můžeme bezpečně naslouchat datům.
+                        // Krok 4: Připojení listenerů pro data
                         attachFirestoreListeners();
 
                     } else {
-                        // Uživatel není přihlášen. Provedeme anonymní přihlášení.
-                        // onAuthStateChanged se poté zavolá znovu, ale tentokrát už s 'user' objektem.
-                        console.log("Nikdo není přihlášen, pokouším se o anonymní přihlášení...");
-                        userIdStatusEl.textContent = 'Stav: Připojování...';
+                        // Uživatel není přihlášen.
+                        console.log("Stav ověření: Odhlášen. Pokus o anonymní přihlášení.");
+                        userIdStatusEl.textContent = 'Stav: Ověřování...';
                         signInAnonymously(auth).catch((error) => {
                             console.error("Chyba při anonymním přihlášení:", error);
-                            userIdStatusEl.textContent = `Stav: Chyba připojení`;
+                            userIdStatusEl.textContent = `Stav: Chyba ověření`;
                             loadingEl.innerHTML = `<p class="text-red-500 font-bold">CHYBA PŘI PŘIHLÁŠENÍ K DATABÁZI. Zkontrolujte, zda je ve Firebase povoleno anonymní přihlašování.</p>`;
                         });
                     }
@@ -1050,33 +1050,45 @@
         };
 
         const attachFirestoreListeners = () => {
+            if (!userId) {
+                console.error("Pokus o připojení listenerů bez userId!");
+                return;
+            }
+            
             // Pokud už listenery běží, odpojíme je, abychom předešli duplicitám.
             if (unsubscribeProjects) unsubscribeProjects();
             if (unsubscribeFixedCosts) unsubscribeFixedCosts();
 
-            // Nastavení cest k datům pro konkrétního uživatele
+            // Krok 5: Nastavení cest k datům pro konkrétního uživatele
             projectsCollectionRef = collection(db, `users/${userId}/projects`);
             fixedCostsDocRef = doc(db, `users/${userId}/costs/fixed`);
+            console.log(`Naslouchám na cestě: users/${userId}/...`);
 
             // Listener pro projekty
             unsubscribeProjects = onSnapshot(projectsCollectionRef, (snapshot) => {
+                console.log("Data projektů přijata.", snapshot.size, "položek.");
                 allProjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderAll();
                 // Zobrazíme hlavní obsah až po prvním úspěšném načtení dat
                 loadingEl.classList.add('hidden');
                 mainContentEl.classList.remove('hidden');
+                userIdStatusEl.textContent = `Stav: Připojeno (ID: ${userId.substring(0, 8)}...)`;
+
             }, (error) => {
                 console.error("Chyba při načítání projektů z Firestore: ", error);
                 loadingEl.innerHTML = `<p class="text-red-500">CHYBA PŘI NAČÍTÁNÍ PROJEKTŮ. Zkontrolujte bezpečnostní pravidla ve Firebase.</p>`;
+                userIdStatusEl.textContent = `Stav: Chyba načítání dat`;
             });
 
             // Listener pro fixní náklady
             unsubscribeFixedCosts = onSnapshot(fixedCostsDocRef, (doc) => {
+                console.log("Data fixních nákladů přijata.");
                 fixedCosts = doc.exists() ? doc.data().costs : [];
                 renderAll();
             }, (error) => {
                 console.error("Chyba při načítání fixních nákladů z Firestore: ", error);
                 loadingEl.innerHTML = `<p class="text-red-500">CHYBA PŘI NAČÍTÁNÍ NÁKLADŮ. Zkontrolujte bezpečnostní pravidla ve Firebase.</p>`;
+                userIdStatusEl.textContent = `Stav: Chyba načítání dat`;
             });
         };
 
@@ -1347,8 +1359,10 @@
         });
         
         // --- SPUŠTĚNÍ APLIKACE ---
-        initFirebase();
-        initStickyHeader();
+        document.addEventListener('DOMContentLoaded', () => {
+            initApp();
+            initStickyHeader();
+        });
 
     </script>
 </body>
