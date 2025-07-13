@@ -152,6 +152,8 @@
                         <div id="custom-legend" class="flex justify-center items-center space-x-6 mt-2 text-xs"></div>
                     </div>
                     <div id="vatSummaryContainer" class="hidden text-white mt-4"></div>
+                    <!-- User ID Display for verification -->
+                    <div id="userIdStatus" class="mt-2 text-right text-gray-500 text-xs normal-case"></div>
                 </div>
             </div>
         </div>
@@ -288,6 +290,7 @@
         const sortOrderSelect = document.getElementById('sortOrder');
         const vatToggleBtn = document.getElementById('vatToggleBtn');
         const vatSummaryContainer = document.getElementById('vatSummaryContainer');
+        const userIdStatusEl = document.getElementById('userIdStatus');
         
         // --- MODAL & FORM HANDLING ---
 
@@ -1022,6 +1025,7 @@
                         // Uživatel je přihlášen (i anonymně).
                         console.log("Uživatel úspěšně přihlášen, UID:", user.uid);
                         userId = user.uid;
+                        userIdStatusEl.textContent = `Stav: Připojeno (ID: ${user.uid})`;
                         
                         // Až TEĎ, když máme userId, můžeme bezpečně naslouchat datům.
                         attachFirestoreListeners();
@@ -1030,9 +1034,11 @@
                         // Uživatel není přihlášen. Provedeme anonymní přihlášení.
                         // onAuthStateChanged se poté zavolá znovu, ale tentokrát už s 'user' objektem.
                         console.log("Nikdo není přihlášen, pokouším se o anonymní přihlášení...");
+                        userIdStatusEl.textContent = 'Stav: Připojování...';
                         signInAnonymously(auth).catch((error) => {
                             console.error("Chyba při anonymním přihlášení:", error);
-                            loadingEl.innerHTML = `<p class="text-red-500 font-bold">CHYBA PŘI PŘIHLÁŠENÍ K DATABÁZI.</p>`;
+                            userIdStatusEl.textContent = `Stav: Chyba připojení`;
+                            loadingEl.innerHTML = `<p class="text-red-500 font-bold">CHYBA PŘI PŘIHLÁŠENÍ K DATABÁZI. Zkontrolujte, zda je ve Firebase povoleno anonymní přihlašování.</p>`;
                         });
                     }
                 });
@@ -1061,7 +1067,7 @@
                 mainContentEl.classList.remove('hidden');
             }, (error) => {
                 console.error("Chyba při načítání projektů z Firestore: ", error);
-                loadingEl.innerHTML = `<p class="text-red-500">CHYBA PŘI NAČÍTÁNÍ PROJEKTŮ.</p>`;
+                loadingEl.innerHTML = `<p class="text-red-500">CHYBA PŘI NAČÍTÁNÍ PROJEKTŮ. Zkontrolujte bezpečnostní pravidla ve Firebase.</p>`;
             });
 
             // Listener pro fixní náklady
@@ -1070,7 +1076,7 @@
                 renderAll();
             }, (error) => {
                 console.error("Chyba při načítání fixních nákladů z Firestore: ", error);
-                loadingEl.innerHTML = `<p class="text-red-500">CHYBA PŘI NAČÍTÁNÍ NÁKLADŮ.</p>`;
+                loadingEl.innerHTML = `<p class="text-red-500">CHYBA PŘI NAČÍTÁNÍ NÁKLADŮ. Zkontrolujte bezpečnostní pravidla ve Firebase.</p>`;
             });
         };
 
