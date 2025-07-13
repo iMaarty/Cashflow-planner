@@ -688,12 +688,11 @@
             }
 
             projectsListContainer.innerHTML = '';
-            if (clientGroups.length === 0) {
+            if (clientGroups.length === 0 && !isFixedCostsMode) {
                 noProjectsEl.classList.remove('hidden');
-                return;
+            } else {
+                noProjectsEl.classList.add('hidden');
             }
-            
-            noProjectsEl.classList.add('hidden');
 
             clientGroups.forEach(group => {
                 const sortedProjects = group.projects.sort((a, b) => getLatestIssueDate(b) - getLatestIssueDate(a));
@@ -824,6 +823,10 @@
 
         const handleSaveProject = async (e) => {
             e.preventDefault();
+            if (!userId) {
+                console.error("Uživatel není přihlášen. Ukládání se neprovede.");
+                return;
+            }
             const formData = new FormData(projectForm);
             const clientName = formData.get('clientName');
             const projectName = formData.get('projectName');
@@ -852,11 +855,16 @@
                 latestIssueDate: newItems.length > 0 ? new Date(Math.max.apply(null, newItems.map(item => new Date(item.issueDate)))) : new Date()
             };
 
-            if (projectKey) { // Editing existing project
-                const projectRef = doc(projectsCollectionRef, projectKey);
-                await updateDoc(projectRef, projectData);
-            } else { // Adding new project
-                await addDoc(projectsCollectionRef, projectData);
+            try {
+                if (projectKey) { // Editing existing project
+                    const projectRef = doc(projectsCollectionRef, projectKey);
+                    await updateDoc(projectRef, projectData);
+                } else { // Adding new project
+                    await addDoc(projectsCollectionRef, projectData);
+                }
+            } catch (error) {
+                console.error("Chyba při ukládání projektu: ", error);
+                alert("Nepodařilo se uložit projekt. Zkontrolujte konzoli pro více detailů.");
             }
             
             closeModal();
@@ -878,10 +886,12 @@
         };
 
         const handleDeleteProject = async (id) => {
+             if (!userId) return;
              await deleteDoc(doc(projectsCollectionRef, id));
         };
         
         const handleCopyClient = async (clientName) => {
+            if (!userId) return;
             const projectsToCopy = allProjects.filter(p => p.clientName === clientName);
             if(projectsToCopy.length === 0) return;
 
@@ -910,7 +920,7 @@
         };
 
         const handleUpdateClientName = async (oldName, newName) => {
-            if (!newName || oldName === newName) return;
+            if (!userId || !newName || oldName === newName) return;
             
             const batch = writeBatch(db);
             const projectsToUpdate = allProjects.filter(p => p.clientName === oldName);
@@ -987,66 +997,82 @@
             renderFixedCosts();
         };
 
-        // --- Firebase Setup ---
-        try {
-            // Vložte zde konfigurační objekt z vašeho Firebase projektu
-            const firebaseConfig = {
-              apiKey: "AIzaSyCHhHB-iW-9aF0Qu_2CBHMvN9XeCmiL4qs",
-              authDomain: "cashflow-planner-83b6c.firebaseapp.com",
-              projectId: "cashflow-planner-83b6c",
-              storageBucket: "cashflow-planner-83b6c.firebasestorage.app",
-              messagingSenderId: "824885342764",
-              appId: "1:824885342764:web:917f03cf3b2194be5f1789"
-            };
+        // --- ROBUSTNÍ FIREBASE INICIALIZACE ---
 
-            // Initialize Firebase
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            const auth = getAuth(app);
+        const initFirebase = () => {
+            try {
+                // DŮLEŽITÉ: Vložte zde konfigurační objekt z vašeho Firebase projektu
+                const firebaseConfig = {
+                  apiKey: "AIzaSyCHhHB-iW-9aF0Qu_2CBHMvN9XeCmiL4qs",
+                  authDomain: "cashflow-planner-83b6c.firebaseapp.com",
+                  projectId: "cashflow-planner-83b6c",
+                  storageBucket: "cashflow-planner-83b6c.firebasestorage.app",
+                  messagingSenderId: "824885342764",
+                  appId: "1:824885342764:web:917f03cf3b2194be5f1789"
+                };
 
-            // Authentication state listener
-            onAuthStateChanged(auth, async user => {
-                if (user) {
-                    // User is signed in.
-                    userId = user.uid;
-                    
-                    // Set up Firestore references
-                    projectsCollectionRef = collection(db, `users/${userId}/projects`);
-                    fixedCostsDocRef = doc(db, `users/${userId}/costs/fixed`);
+                // Inicializace Firebase
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+                db = getFirestore(app);
 
-                    // Unsubscribe from previous listeners if they exist
-                    if (unsubscribeProjects) unsubscribeProjects();
-                    // Listen for real-time updates on projects
-                    unsubscribeProjects = onSnapshot(projectsCollectionRef, (snapshot) => {
-                        allProjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        renderAll();
-                        loadingEl.classList.add('hidden');
-                        mainContentEl.classList.remove('hidden');
-                    }, (error) => {
-                        console.error("Chyba při načítání projektů: ", error);
-                        loadingEl.innerHTML = `<p class="text-red-500">CHYBA PŘI NAČÍTÁNÍ PROJEKTŮ. ZKONTROLUJTE KONZOLI.</p>`;
-                    });
+                // Listener na změnu stavu přihlášení. Toto je klíčový mechanismus.
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        // Uživatel je přihlášen (i anonymně).
+                        console.log("Uživatel úspěšně přihlášen, UID:", user.uid);
+                        userId = user.uid;
+                        
+                        // Až TEĎ, když máme userId, můžeme bezpečně naslouchat datům.
+                        attachFirestoreListeners();
 
-                    // Unsubscribe from previous listeners if they exist
-                    if (unsubscribeFixedCosts) unsubscribeFixedCosts();
-                    // Listen for real-time updates on fixed costs
-                    unsubscribeFixedCosts = onSnapshot(fixedCostsDocRef, (doc) => {
-                        fixedCosts = doc.exists() ? doc.data().costs : [];
-                        renderAll();
-                    }, (error) => {
-                        console.error("Chyba při načítání fixních nákladů: ", error);
-                        loadingEl.innerHTML = `<p class="text-red-500">CHYBA PŘI NAČÍTÁNÍ NÁKLADŮ. ZKONTROLUJTE KONZOLI.</p>`;
-                    });
+                    } else {
+                        // Uživatel není přihlášen. Provedeme anonymní přihlášení.
+                        // onAuthStateChanged se poté zavolá znovu, ale tentokrát už s 'user' objektem.
+                        console.log("Nikdo není přihlášen, pokouším se o anonymní přihlášení...");
+                        signInAnonymously(auth).catch((error) => {
+                            console.error("Chyba při anonymním přihlášení:", error);
+                            loadingEl.innerHTML = `<p class="text-red-500 font-bold">CHYBA PŘI PŘIHLÁŠENÍ K DATABÁZI.</p>`;
+                        });
+                    }
+                });
 
-                } else {
-                     // User is signed out. Sign in anonymously.
-                     await signInAnonymously(auth);
-                }
+            } catch (e) {
+                console.error("Kritická chyba konfigurace Firebase:", e);
+                loadingEl.innerHTML = `<p class="text-red-500 font-bold">CHYBA KONFIGURACE FIREBASE. ZKONTROLUJTE KONZOLI.</p>`;
+            }
+        };
+
+        const attachFirestoreListeners = () => {
+            // Pokud už listenery běží, odpojíme je, abychom předešli duplicitám.
+            if (unsubscribeProjects) unsubscribeProjects();
+            if (unsubscribeFixedCosts) unsubscribeFixedCosts();
+
+            // Nastavení cest k datům pro konkrétního uživatele
+            projectsCollectionRef = collection(db, `users/${userId}/projects`);
+            fixedCostsDocRef = doc(db, `users/${userId}/costs/fixed`);
+
+            // Listener pro projekty
+            unsubscribeProjects = onSnapshot(projectsCollectionRef, (snapshot) => {
+                allProjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderAll();
+                // Zobrazíme hlavní obsah až po prvním úspěšném načtení dat
+                loadingEl.classList.add('hidden');
+                mainContentEl.classList.remove('hidden');
+            }, (error) => {
+                console.error("Chyba při načítání projektů z Firestore: ", error);
+                loadingEl.innerHTML = `<p class="text-red-500">CHYBA PŘI NAČÍTÁNÍ PROJEKTŮ.</p>`;
             });
-        } catch (e) {
-            console.error("Chyba konfigurace Firebase:", e);
-            loadingEl.innerHTML = `<p class="text-red-500 font-bold">CHYBA KONFIGURACE FIREBASE. ZKONTROLUJTE KONZOLI.</p>`;
-        }
+
+            // Listener pro fixní náklady
+            unsubscribeFixedCosts = onSnapshot(fixedCostsDocRef, (doc) => {
+                fixedCosts = doc.exists() ? doc.data().costs : [];
+                renderAll();
+            }, (error) => {
+                console.error("Chyba při načítání fixních nákladů z Firestore: ", error);
+                loadingEl.innerHTML = `<p class="text-red-500">CHYBA PŘI NAČÍTÁNÍ NÁKLADŮ.</p>`;
+            });
+        };
 
 
         // --- EVENT LISTENERS ---
@@ -1249,11 +1275,13 @@
         });
 
         addFixedCostBtn.addEventListener('click', async () => {
+            if (!userId) return;
             const newFixedCosts = [...fixedCosts, { id: crypto.randomUUID(), name: '', amount: 0, vatRate: 21 }];
             await setDoc(fixedCostsDocRef, { costs: newFixedCosts });
         });
 
-        fixedCostsList.addEventListener('change', (e) => {
+        fixedCostsList.addEventListener('change', async (e) => {
+            if (!userId) return;
             const index = e.target.dataset.index;
             const value = e.target.value;
             const name = e.target.name;
@@ -1265,15 +1293,16 @@
             } else if (name === 'fixedVatRate') {
                 updatedFixedCosts[index].vatRate = parseInt(value);
             }
-            setDoc(fixedCostsDocRef, { costs: updatedFixedCosts });
+            await setDoc(fixedCostsDocRef, { costs: updatedFixedCosts });
         });
 
-        fixedCostsList.addEventListener('click', (e) => {
+        fixedCostsList.addEventListener('click', async (e) => {
             if (e.target.classList.contains('removeFixedCostBtn')) {
+                if (!userId) return;
                 const index = e.target.dataset.index;
                 const updatedFixedCosts = [...fixedCosts];
                 updatedFixedCosts.splice(index, 1);
-                setDoc(fixedCostsDocRef, { costs: updatedFixedCosts });
+                await setDoc(fixedCostsDocRef, { costs: updatedFixedCosts });
             }
         });
 
@@ -1311,7 +1340,8 @@
             renderProjects();
         });
         
-        // Initial load
+        // --- SPUŠTĚNÍ APLIKACE ---
+        initFirebase();
         initStickyHeader();
 
     </script>
